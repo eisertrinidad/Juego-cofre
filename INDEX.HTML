@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>La aventura del cofre</title>
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      padding: 20px;
+      font-family: Arial, sans-serif;
+      color: #283044;
+      background: linear-gradient(135deg, #b8f2e6, #fbe7a1);
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+    }
+
+    main {
+      width: min(620px, 100%);
+      padding: 26px;
+      background: white;
+      border-radius: 22px;
+      box-shadow: 0 8px 25px #26323830;
+      text-align: center;
+    }
+
+    h1 { color: #3a7d44; margin-top: 0; }
+    h2 { color: #4169a1; }
+    p { line-height: 1.5; }
+
+    button {
+      border: 0;
+      border-radius: 12px;
+      padding: 12px 16px;
+      margin: 7px;
+      background: #4caf70;
+      color: white;
+      font-size: 16px;
+      cursor: pointer;
+    }
+
+    button:hover { filter: brightness(0.94); }
+    button.secondary { background: #6687c4; }
+    button.choice { background: #f0a44b; color: #283044; }
+    .hidden { display: none; }
+
+    #mapa { font-size: 25px; margin: 15px 0; }
+    #mensaje { min-height: 28px; font-weight: bold; }
+    .small { color: #626b78; font-size: 14px; }
+  </style>
+</head>
+
+<body>
+<main>
+  <section id="inicio">
+    <h1>🗺️ La aventura del cofre</h1>
+    <p>¡Elige un personaje y resuelve los retos para encontrar el tesoro!</p>
+    <div id="personajes"></div>
+    <button id="continuar" class="secondary hidden" onclick="continuarJuego()">
+      ▶️ Continuar partida
+    </button>
+    <p class="small">El progreso se guarda en este navegador y dispositivo.</p>
+  </section>
+
+  <section id="juego" class="hidden">
+    <h2 id="jugador"></h2>
+    <p id="progreso"></p>
+    <div id="mapa"></div>
+    <h2 id="zona"></h2>
+    <p id="pregunta"></p>
+    <div id="opciones"></div>
+    <p id="mensaje" aria-live="polite"></p>
+    <button class="secondary" onclick="pista()">💡 Pista</button>
+    <button class="secondary" onclick="volverInicio()">Volver al inicio</button>
+  </section>
+
+  <section id="final" class="hidden">
+    <h1>🎉 ¡Encontraron el tesoro!</h1>
+    <p id="mensajeFinal"></p>
+    <button onclick="reiniciar()">Jugar otra vez</button>
+  </section>
+</main>
+
+<script>
+  const personajes = [
+    { nombre: "Mia", edad: 8, emoji: "🧭" },
+    { nombre: "Xaris", edad: 10, emoji: "🔦" },
+    { nombre: "Hidai", edad: 13, emoji: "🗺️" }
+  ];
+
+  const claveProgreso = "aventuraCofreProgreso";
+
+  const retos = [
+    {
+      zona: "🌳 Bosque de las palabras",
+      pregunta: "Completa: El sol brilla durante el ___.",
+      pista: "Es lo contrario de la noche.",
+      opciones: ["día", "mar", "árbol"],
+      respuesta: "día"
+    },
+    {
+      zona: "🌊 Río de los recuerdos",
+      pregunta: "¿Qué símbolo estaba en medio? 🐟 ⭐ 🍃",
+      pista: "Está entre el pez y la hoja.",
+      opciones: ["🐟", "⭐", "🍃"],
+      respuesta: "⭐"
+    },
+    {
+      zona: "🪨 Cueva de los números",
+      pregunta: "",
+      pista: "",
+      opciones: [],
+      respuesta: ""
+    },
+    {
+      zona: "⛰️ Montaña de los patrones",
+      pregunta: "¿Qué sigue? 🔴 🔵 🔴 🔵 ___",
+      pista: "Los colores se alternan.",
+      opciones: ["🔴", "🟢", "⭐"],
+      respuesta: "🔴"
+    },
+    {
+      zona: "🏝️ Isla de las pistas",
+      pregunta: "El cofre está bajo tierra. ¿Qué herramienta ayudaría a encontrarlo?",
+      pista: "Piensa en algo que sirva para cavar.",
+      opciones: ["Una pala", "Un paraguas", "Un peine"],
+      respuesta: "Una pala"
+    }
+  ];
+
+  let jugador = null;
+  let paso = 0;
+  let retoActual = null;
+
+  function leerProgreso() {
+    try {
+      return JSON.parse(localStorage.getItem(claveProgreso)) || {};
+    } catch {
+      return {};
+    }
+  }
+
+  function guardarProgreso() {
+    if (!jugador) return;
+    const progreso = leerProgreso();
+    progreso[jugador.nombre] = { edad: jugador.edad, paso };
+    localStorage.setItem(claveProgreso, JSON.stringify(progreso));
+    actualizarBotonContinuar();
+  }
+
+  function dibujarPersonajes() {
+    const caja = document.getElementById("personajes");
+    caja.innerHTML = "";
+
+    personajes.forEach(persona => {
+      const boton = document.createElement("button");
+      boton.textContent = `${persona.emoji} ${persona.nombre} (${persona.edad} años)`;
+      boton.onclick = () => empezarJuego(persona);
+      caja.appendChild(boton);
+    });
+
+    actualizarBotonContinuar();
+  }
+
+  function actualizarBotonContinuar() {
+    const progreso = leerProgreso();
+    const hayPartida = personajes.some(persona => {
+      const p = progreso[persona.nombre];
+      return p && p.paso > 0 && p.paso < retos.length;
+    });
+
+    document.getElementById("continuar").classList.toggle("hidden", !hayPartida);
+  }
+
+  function empezarJuego(persona) {
+    jugador = persona;
+    const guardado = leerProgreso()[persona.nombre];
+    paso = guardado && guardado.edad === persona.edad ? guardado.paso : 0;
+
+    mostrarSeccion("juego");
+    mostrarReto();
+  }
+
+  function continuarJuego() {
+    const progreso = leerProgreso();
+    const persona = personajes.find(p => {
+      const guardado = progreso[p.nombre];
+      return guardado && guardado.paso > 0 && guardado.paso < retos.length;
+    });
+
+    if (persona) empezarJuego(persona);
+  }
+
+  function hacerReto(indice) {
+    const reto = { ...retos[indice] };
+
+    if (indice === 2) {
+      if (jugador.edad === 8) {
+        Object.assign(reto, {
+          pregunta: "Tienes 3 manzanas y encuentras 2 más. ¿Cuántas tienes?",
+          pista: "Cuenta 3 y luego 2 más.",
+          opciones: ["4", "5", "6"],
+          respuesta: "5"
+        });
+      } else if (jugador.edad === 10) {
+        Object.assign(reto, {
+          pregunta: "Hay 4 cofres con 3 gemas cada uno. ¿Cuántas gemas hay?",
+          pista: "Calcula 4 × 3.",
+          opciones: ["7", "12", "14"],
+          respuesta: "12"
+        });
+      } else {
+        Object.assign(reto, {
+          pregunta: "Hay 24 gemas para repartir entre 4 exploradores. ¿Cuántas recibe cada uno?",
+          pista: "Busca el número que multiplicado por 4 da 24.",
+          opciones: ["4", "6", "8"],
+          respuesta: "6"
+        });
+      }
+    }
+
+    return reto;
+  }
+
+  function mostrarReto() {
+    if (paso >= retos.length) {
+      const progreso = leerProgreso();
+      delete progreso[jugador.nombre];
+      localStorage.setItem(claveProgreso, JSON.stringify(progreso));
+      document.getElementById("mensajeFinal").textContent =
+        `¡${jugador.nombre}, completaste todos los retos!`;
+      mostrarSeccion("final");
+      actualizarBotonContinuar();
+      return;
+    }
+
+    retoActual = hacerReto(paso);
+    document.getElementById("jugador").textContent =
+      `${jugador.emoji} ${jugador.nombre} · ${jugador.edad} años`;
+    document.getElementById("progreso").textContent =
+      `Reto ${paso + 1} de ${retos.length}`;
+    document.getElementById("zona").textContent = retoActual.zona;
+    document.getElementById("pregunta").textContent = retoActual.pregunta;
+    document.getElementById("mensaje").textContent = "";
+
+    document.getElementById("mapa").textContent =
+      retos.map((_, i) => i < paso ? "✅" : "📍").join(" ") + " 🧰";
+
+    const caja = document.getElementById("opciones");
+    caja.innerHTML = "";
+
+    retoActual.opciones.forEach(opcion => {
+      const boton = document.createElement("button");
+      boton.className = "choice";
+      boton.textContent = opcion;
+      boton.onclick = () => responder(opcion);
+      caja.appendChild(boton);
+    });
+  }
+
+  function responder(opcion) {
+    const mensaje = document.getElementById("mensaje");
+
+    if (opcion === retoActual.respuesta) {
+      paso++;
+      guardarProgreso();
+      mensaje.textContent = "¡Correcto! ¡Avanzaste a la siguiente parada! ✨";
+      setTimeout(mostrarReto, 900);
+    } else {
+      mensaje.textContent = "¡Buen intento! Prueba otra vez o pide una pista. 🌱";
+    }
+  }
+
+  function pista() {
+    document.getElementById("mensaje").textContent =
+      "Pista: " + retoActual.pista;
+  }
+
+  function volverInicio() {
+    guardarProgreso();
+    mostrarSeccion("inicio");
+  }
+
+  function reiniciar() {
+    if (jugador) {
+      const progreso = leerProgreso();
+      delete progreso[jugador.nombre];
+      localStorage.setItem(claveProgreso, JSON.stringify(progreso));
+    }
+
+    paso = 0;
+    mostrarSeccion("inicio");
+    actualizarBotonContinuar();
+  }
+
+  function mostrarSeccion(id) {
+    ["inicio", "juego", "final"].forEach(seccion => {
+      document.getElementById(seccion).classList.toggle("hidden", seccion !== id);
+    });
+  }
+
+  dibujarPersonajes();
+</script>
+</body>
+</html>
